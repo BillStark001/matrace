@@ -1,0 +1,8 @@
+# production
+miss_hit_core
+torch
+numpy
+
+# development
+pytest>=6.0
+torchdiffeq
