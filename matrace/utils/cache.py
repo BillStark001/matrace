@@ -18,7 +18,7 @@ def cache(cache_file='func_cache.pkl'):
             with open(cache_file, 'rb') as f:
               args, kwargs = pickle.load(f)
             return func(*args, **kwargs)
-          except (pickle.PickleError, EOFError, FileNotFoundError) as e:
+          except (pickle.PickleError, EOFError, FileNotFoundError):
             # do nothing if failed
             return None
         else:
@@ -28,7 +28,7 @@ def cache(cache_file='func_cache.pkl'):
         try:
           with open(cache_file, 'wb') as f:
             pickle.dump((args, kwargs), f)
-        except (pickle.PickleError, IOError) as e:
+        except (pickle.PickleError, IOError):
           pass  # do nothing
         result = func(*args, **kwargs)
         return result

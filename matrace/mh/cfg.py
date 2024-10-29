@@ -296,6 +296,8 @@ def process_if_statement(cfg: CFG, stmt: If_Statement, current_id: int) -> int:
   cfg.add_edge(current_id, if_node, "")
 
   end_if = cfg.add_node(CFGType.IF_EXIT, "End If")
+  break_if = cfg.add_node(CFGType.IF_EXIT, "Break If")
+  cfg.add_edge(break_if, cfg.ctx.exit.current, "Break If")
 
   i_cur = 0
   with_else = False
@@ -311,11 +313,13 @@ def process_if_statement(cfg: CFG, stmt: If_Statement, current_id: int) -> int:
     i_cur = i
     if not with_else:
       with_else = action.n_expr is None
+    with cfg.ctx.exit.provide(break_if):
+      action_end = process_statements(cfg, action.n_body, action_start)
+      
+    cfg.add_edge(action_end, end_if, "")
+      
   if not with_else:
     cfg.add_edge(if_node, end_if, 'Default Else', None, i_cur + 1)
-
-    action_end = process_statements(cfg, action.n_body, action_start)
-    cfg.add_edge(action_end, end_if, "")
 
   return end_if
 

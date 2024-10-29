@@ -23,8 +23,8 @@ class DictWrapper:
   def __getattr__(self, key):
     try:
       value = self._data[key]
-    except KeyError:
-      raise AttributeError(f"'DictWrapper' object has no attribute '{key}'")
+    except KeyError as exc:
+      raise AttributeError(f"'DictWrapper' object has no attribute '{key}'") from exc
     if isinstance(value, dict):
       return DictWrapper(value)
     return value

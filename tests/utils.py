@@ -4,7 +4,7 @@ import torch
 from miss_hit_core.m_ast import *
 
 from matrace.miss_hit_helper import get_function_by_name, parse_matlab_code
-from matrace.src_exec_cfg import exec_func
+from matrace.exec_cfg import exec_func
 from matrace.utils import DictWrapper
 
 def create_struct(*args):
