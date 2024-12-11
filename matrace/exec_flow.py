@@ -231,7 +231,7 @@ class CodeExecutor:
     row_items = []
     for row_node in node.n_content.l_items:
       if not row_node.l_items:
-        items = None  # dummy row
+        continue  # dummy row
       items = [
           self.eval(x, strict_matrix=False)
           for x in row_node.l_items

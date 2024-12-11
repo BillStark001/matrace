@@ -10,7 +10,7 @@ element_wise_operations = import_matlab_func(
 )
 
 matrix_operations = import_matlab_func(
-  './tests/matlab_examples/matrix_operations.m',
+    './tests/matlab_examples/matrix_operations.m',
 )
 
 t = torch.tensor
@@ -45,10 +45,13 @@ def test_ew_3():
   assert torch.equal(r2, t([[False, True], [False, True]]))
   assert r3[0, 0] == 2
 
+
 def test_mat_1():
   A3 = t([[-1, 2], [-3, 4]])
   B3 = t([[1, -1], [3, 2]])
-  r1, r2, r3 = matrix_operations(A3, B3)
+  r1, r2, r3, r4 = matrix_operations(A3, B3)
   assert torch.equal(r1, A3 @ B3)
   assert torch.equal(r2, A3.transpose(0, 1))
   assert torch.equal(r3, t([[3]]))
+  assert tuple(r4.shape) == (4, 1)
+  
