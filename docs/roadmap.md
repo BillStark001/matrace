@@ -11,61 +11,44 @@ Transform matrace from a dynamic interpreter into a hybrid system that:
 4. **Optimizes memory usage** with copy-on-write analysis
 5. **Supports modern development** with type annotations and tooling
 
-## Phase 1: Code Reorganization (Foundation)
+## Phase 1: Code Reorganization ✅ Completed
 
 **Goal**: Establish clear separation of concerns and modular architecture.
 
-### 1.1 Restructure Module Hierarchy
+### 1.1 Restructure Module Hierarchy ✅
 
-**Current Structure**:
-```
-matrace/
-├── helper.py
-├── exec_flow.py
-├── exec_cfg.py
-├── mh/
-├── std/
-└── utils/
-```
-
-**Proposed Structure**:
+**Implemented Structure**:
 ```
 matrace/
 ├── api/                    # Public API
 │   └── import_func.py      # Main import function
 ├── parser/                 # MATLAB parsing
-│   ├── lexer.py           # Wrapper around miss_hit lexer
-│   ├── parser.py          # Wrapper around miss_hit parser
-│   └── ast_utils.py       # AST utilities
-├── analysis/              # Static analysis modules
-│   ├── type_inference.py  # Type inference engine
-│   ├── module_graph.py    # Import/export analysis
-│   ├── cow_analysis.py    # Copy-on-write detection
-│   └── class_analyzer.py  # Class structure analysis
-├── ir/                    # Intermediate representation
-│   ├── cfg.py            # Control flow graph (moved from mh/)
-│   ├── ast_visitor.py    # AST visitor (moved from mh/)
-│   └── typed_ast.py      # Type-annotated AST
-├── compiler/             # Static compilation
-│   ├── codegen.py        # Generate PyTorch code
-│   ├── optimizer.py      # IR optimization passes
-│   └── torch_backend.py  # PyTorch code generation
-├── interpreter/          # Dynamic execution
-│   ├── executor.py       # Main interpreter (exec_flow.py)
-│   ├── cfg_executor.py   # CFG interpreter (exec_cfg.py)
-│   └── context.py        # Execution context
-├── stdlib/               # Standard library (renamed from std/)
-│   ├── operators.py      # Operators (opr.py)
-│   ├── matrix.py         # Matrix ops (mat_opr.py)
-│   ├── indexing.py       # Indexing (mat_subs.py)
-│   ├── cells.py          # Cell arrays (cell_opr.py)
-│   └── structs.py        # Structures (struct.py)
-├── types/                # Type system
-│   ├── base.py           # Base type classes
-│   ├── matrix_type.py    # Matrix type system
-│   ├── cell_type.py      # Cell array types
-│   └── struct_type.py    # Struct types
-└── utils/                # Utilities (keep existing)
+│   ├── parser.py           # Wrapper around miss_hit parser/lexer
+│   └── ast_utils.py        # AST utilities
+├── ir/                     # Intermediate representation
+│   ├── cfg.py              # Control flow graph (moved from mh/)
+│   └── ast_visitor.py      # AST visitor (moved from mh/)
+├── interpreter/            # Dynamic execution
+│   ├── executor.py         # Main interpreter (was exec_flow.py)
+│   └── cfg_executor.py     # CFG interpreter (was exec_cfg.py)
+├── stdlib/                 # Standard library (renamed from std/)
+│   ├── operators.py        # Operators (was opr.py)
+│   ├── matrix.py           # Matrix ops (was mat_opr.py)
+│   ├── indexing.py         # Indexing (was mat_subs.py)
+│   ├── cells.py            # Cell arrays (was cell_opr.py)
+│   └── structs.py          # Structures (was struct.py)
+├── types/                  # Type system (Phase 2.1)
+│   ├── base.py             # MatraceType, AnyType
+│   ├── scalar.py           # ScalarType
+│   ├── matrix.py           # VectorType, MatrixType
+│   ├── cell.py             # CellType
+│   ├── struct.py           # StructType
+│   ├── function.py         # FunctionType
+│   ├── dtypes.py           # Dtype literal + DTYPES set
+│   └── registry.py         # TYPE_REGISTRY + register_type_parser()
+├── analysis/               # Static analysis (Phase 2.2+)
+│   └── type_parser.py      # JSDoc annotation parser
+└── utils/                  # Utilities (kept existing)
 ```
 
 **Benefits**:
@@ -83,162 +66,132 @@ matrace/
 
 **Estimated Effort**: 2-3 weeks
 
-### 1.2 Define Public API Contract
+### 1.2 Define Public API Contract ✅
 
-**Current Issue**: `helper.py` is the main API but not well-defined.
-
-**Proposed API** (`matrace/api/import_func.py`):
+**Implemented** (`matrace/api/import_func.py`):
 ```python
 def import_matlab_func(
     source: str | Path,
     *,
-    function_name: str | List[str] | None = None,
+    function_name: str | List[str | None] | None = None,
     scope: Dict[str, Any] | None = None,
     is_code: bool = False,
     return_ast: bool = False,
     compile_mode: Literal["auto", "static", "dynamic"] = "auto",
-    type_hints: Dict[str, TypeHint] | None = None,
-) -> Callable | List[Callable]:
-    """
-    Import MATLAB function(s) as Python callables.
-    
-    Args:
-        source: File path or code string
-        function_name: Name(s) of function(s) to import
-        scope: External functions to inject
-        is_code: True if source is code string, False if file path
-        return_ast: Return (AST, callable) tuples
-        compile_mode: 
-            - "auto": Use static if types available, else dynamic
-            - "static": Force static compilation (error if types missing)
-            - "dynamic": Force dynamic interpretation
-        type_hints: Optional type hints for parameters
-    
-    Returns:
-        Callable or list of callables
-    """
-    pass
+    type_hints: Dict[str, Any] | None = None,
+) -> Callable | List[Callable] | tuple | List[tuple]:
+    ...
 ```
 
-**Benefits**:
-- Clear contract for users
-- Extensibility for new features
-- Backward compatibility path
+- `function_name=None` imports the first (or default-named) function.
+- `function_name="foo"` imports `"foo"` specifically.
+- `function_name=["foo", None, "bar"]` imports three functions; `None` within the list selects the default/first function.
+- When `return_ast=False` (default): returns `Callable` or `list[Callable]`.
+- When `return_ast=True`: each element is a `(Function_Definition, FuncAnnotation, callable)` triple.
 
-**Estimated Effort**: 1 week
-
-## Phase 2: Type System Implementation
+## Phase 2: Type System Implementation ✅ Partially Completed
 
 **Goal**: Introduce a type system to enable static analysis and optimization.
 
-### 2.1 Design Type Hierarchy
+### 2.1 Design Type Hierarchy ✅
 
-**Base Types**:
+**Implemented** (`matrace/types/`):
 ```python
 # matrace/types/base.py
-class MatraceType:
-    """Base class for all matrace types."""
-    pass
-
-class ScalarType(MatraceType):
-    """Scalar number or logical."""
-    dtype: Literal["float", "int", "logical"]
-
-class VectorType(MatraceType):
-    """Row or column vector."""
-    orientation: Literal["row", "col"]
-    length: int | None  # None = variable length
-    dtype: Literal["float", "int", "logical"]
-
-class MatrixType(MatraceType):
-    """Matrix (2D array)."""
-    rows: int | None    # None = variable
-    cols: int | None    # None = variable
-    dtype: Literal["float", "int", "logical"]
-
-class CellType(MatraceType):
-    """Cell array."""
-    element_type: MatraceType  # Type of elements (can be Any)
-    shape: Tuple[int | None, int | None]
-
-class StructType(MatraceType):
-    """Structure with named fields."""
-    fields: Dict[str, MatraceType]
-
-class FunctionType(MatraceType):
-    """Function signature."""
-    params: List[MatraceType]
-    returns: List[MatraceType]
+class MatraceType(ABC):
+    """Abstract base class for all matrace types."""
 
 class AnyType(MatraceType):
-    """Unknown/dynamic type."""
-    pass
+    """Singleton – unknown / dynamic type."""
+
+# matrace/types/scalar.py
+@dataclass(frozen=True)
+class ScalarType(MatraceType):
+    dtype: Literal["float", "int", "logical"] = "float"
+
+# matrace/types/matrix.py
+@dataclass(frozen=True)
+class VectorType(MatraceType):
+    dtype: Literal["float", "int", "logical"] = "float"
+    length: int | None = None
+    orientation: Literal["row", "col"] | None = None
+
+@dataclass(frozen=True)
+class MatrixType(MatraceType):
+    dtype: Literal["float", "int", "logical"] = "float"
+    rows: int | None = None
+    cols: int | None = None
+
+# matrace/types/cell.py
+@dataclass
+class CellType(MatraceType):
+    element_type: MatraceType = field(default_factory=AnyType)
+    shape: tuple[int | None, int | None] = (None, None)
+
+# matrace/types/struct.py
+@dataclass
+class StructType(MatraceType):
+    fields: dict[str, MatraceType] = field(default_factory=dict)
+
+# matrace/types/function.py
+@dataclass
+class FunctionType(MatraceType):
+    params: list[MatraceType] = field(default_factory=list)
+    returns: list[MatraceType] = field(default_factory=list)
 ```
 
-**Example Usage**:
+**Extensibility** (`matrace/types/registry.py`):
 ```python
-# x is a 3×3 matrix of floats
-x_type = MatrixType(rows=3, cols=3, dtype="float")
-
-# y is a variable-length column vector
-y_type = VectorType(orientation="col", length=None, dtype="float")
+from matrace.types.registry import register_type_parser
+register_type_parser("mytype", my_parser_fn)
 ```
 
-**Estimated Effort**: 2 weeks
+### 2.2 Implement JSDoc-Style Type Annotations ✅
 
-### 2.2 Implement JSDoc-Style Type Annotations
+**Implemented** (`matrace/analysis/type_parser.py`).
 
-**Goal**: Allow users to annotate MATLAB code with type hints in comments.
-
-**Syntax Design** (similar to JSDoc/TypeDoc):
+**Supported syntax**:
 ```matlab
 % @param {scalar float} x - Input value
 % @param {matrix<3,3> float} A - 3x3 matrix
+% @param {vector<any> float} b
+% @param {cell<scalar float>} C
+% @param {struct<{x: scalar float, y: scalar float}>} pt
 % @returns {scalar float} - Result
 function y = my_func(x, A)
     y = x * sum(A(:));
 end
 ```
 
-**Type Annotation Grammar**:
+**Type grammar**:
 ```
 type := scalar <dtype>
-      | vector<length?> <dtype>
-      | matrix<rows?,cols?> <dtype>
+      | vector<dim?> <dtype>
+      | matrix<dim,dim?> <dtype>
       | cell<type?>
-      | struct<{field: type, ...}>
+      | struct<{field: type, …}>
       | any
+      | <custom keyword>   ← extensible via TYPE_REGISTRY
 
 dtype := float | int | logical
+dim   := <integer> | any
 ```
 
-**Examples**:
-```matlab
-% @param {matrix<any,any> float} A - Variable-size matrix
-% @param {vector<any> float} b - Variable-length vector
-% @returns {matrix<any,any> float}
-function x = solve(A, b)
-    x = A \ b;
-end
+**Python API**:
+```python
+from matrace.analysis import parse_type_str, extract_func_annotations
+from matrace import import_matlab_func
 
-% @param {cell<scalar float>} C - Cell array of scalars
-% @returns {scalar float}
-function s = sum_cells(C)
-    s = 0;
-    for i = 1:length(C)
-        s = s + C{i};
-    end
-end
+# Parse a type string directly
+t = parse_type_str("matrix<3,3> float")  # → MatrixType(rows=3, cols=3, dtype='float')
+
+# Import with annotations
+ast_node, annotation, func = import_matlab_func(
+    "solve.m", return_ast=True
+)
+# annotation.params["A"] → MatrixType(dtype='float', rows=3, cols=3)
+# annotation.returns[0]  → VectorType(dtype='float', length=None)
 ```
-
-**Implementation**:
-1. **Parser**: Extract type hints from comments before/after function signature
-2. **Validator**: Verify type annotation syntax
-3. **Type Builder**: Construct `MatraceType` objects from annotations
-
-**Module**: `matrace/analysis/type_parser.py`
-
-**Estimated Effort**: 3 weeks
 
 ### 2.3 Type Inference Engine
 
@@ -664,20 +617,24 @@ Expected second operand to have 4 rows, got 5
 
 ## Implementation Timeline
 
-### Short-term (0-6 months)
-- **Month 1-2**: Phase 1 (Code reorganization)
-- **Month 3-4**: Phase 2.1-2.2 (Type system, annotations)
-- **Month 5-6**: Phase 2.3 (Type inference basics)
+### Completed
+- ✅ **Phase 1.1**: Module restructuring
+- ✅ **Phase 1.2**: Public API contract
+- ✅ **Phase 2.1**: Type hierarchy
+- ✅ **Phase 2.2**: JSDoc annotation parser
+
+### Short-term (next 0-6 months)
+- **Month 1-2**: Phase 2.3 (Type inference basics)
+- **Month 3-4**: Phase 3.1-3.2 (IR and code generation)
+- **Month 5-6**: Phase 4.1 (Module analysis)
 
 ### Medium-term (6-12 months)
-- **Month 7-8**: Phase 3.1-3.2 (IR and code generation)
-- **Month 9-10**: Phase 4.1 (Module analysis)
-- **Month 11-12**: Phase 5.1 (Copy-on-write basics)
+- **Month 7-8**: Phase 3.3 (Optimizations)
+- **Month 9-10**: Phase 5.1 (Copy-on-write)
+- **Month 11-12**: Phase 6 (Class support basics)
 
 ### Long-term (12+ months)
-- **Month 13-14**: Phase 3.3 (Optimizations)
-- **Month 15-16**: Phase 6 (Class support)
-- **Month 17-18**: Phase 7 (Developer experience)
+- Phase 7 (Developer experience)
 
 ## Backward Compatibility
 
