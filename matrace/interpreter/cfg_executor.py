@@ -5,8 +5,8 @@ import torch
 
 from miss_hit_core.m_ast import *
 
-from matrace.mh.cfg import CFG, CFGNode, CFGType, generate_cfg
-from matrace.exec_flow import CodeExecutor, Evaluated
+from matrace.ir.cfg import CFG, CFGNode, CFGType, generate_cfg
+from matrace.interpreter.executor import CodeExecutor, Evaluated
 from matrace.utils import ContextManager
 
 STOP_ITR = -1
@@ -53,7 +53,7 @@ class CodeControlExecutor(CodeExecutor):
     self.for_loop = ContextManager(default_for)
 
   def eval(
-    self, node: Expression | str, 
+    self, node: Expression | str,
     *args, **kwargs,
   ) -> Evaluated:
     if isinstance(node, str):
@@ -156,7 +156,7 @@ def exec_func(
 
   # gather and return outputs
   ret_value = None
-  
+
   if len(src.n_sig.l_outputs) != 0:
     ret = []
     for n in src.n_sig.l_outputs:

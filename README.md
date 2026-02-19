@@ -75,7 +75,7 @@ func = import_matlab_func(
     scope={
         'sum': lambda x: torch.sum(x).unsqueeze(0).unsqueeze(0),
         'sqrt': torch.sqrt,
-        'sin': torch.sin
+        'sin': torch.sin,
     }
 )
 ```
@@ -192,10 +192,11 @@ MATLAB Source → Parser → AST → CFG → Interpreter → PyTorch Ops
 ```
 
 **Key Components**:
-1. **Parser** (`helper.py`): Uses `miss_hit_core` to parse MATLAB
-2. **AST/CFG** (`mh/`): Abstract syntax tree and control flow graph
-3. **Interpreter** (`exec_*.py`): Dynamic code execution engine
-4. **Standard Library** (`std/`): PyTorch implementations of MATLAB operations
+1. **Parser** (`matrace/parser/`): Uses `miss_hit_core` to parse MATLAB into an AST
+2. **IR / CFG** (`matrace/ir/`): Control flow graph and AST visitor utilities
+3. **Interpreter** (`matrace/interpreter/`): Dynamic code execution engine
+4. **Standard Library** (`matrace/stdlib/`): PyTorch implementations of MATLAB operations
+5. **Public API** (`matrace/api/`): Stable, well-defined entry point (`import_matlab_func`)
 
 For detailed architecture, see [Architecture Documentation](docs/architecture.md).
 
