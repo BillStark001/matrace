@@ -1,6 +1,6 @@
 import torch
 
-from matrace.std.mat_subs import eval_subsref_arr
+from matrace.stdlib.indexing import eval_subsref_arr
 
 
 A = torch.tensor([

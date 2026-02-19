@@ -1,4 +1,4 @@
-from matrace.std.cell_opr import concat_cells_col, concat_cells_row
+from matrace.stdlib.cells import concat_cells_col, concat_cells_row
 
 
 def test_concat_cells_row_empty():

@@ -1,6 +1,6 @@
 import torch
 
-from matrace.helper import import_matlab_func
+from matrace.api.import_func import import_matlab_func
 
 functions = import_matlab_func(
     './tests/matlab_examples/basic_functions.m',

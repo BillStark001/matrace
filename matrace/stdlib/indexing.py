@@ -2,7 +2,7 @@ from typing import List, Any, Tuple
 import torch
 import numpy as np
 
-from matrace.std.opr import slice_to_tensor
+from matrace.stdlib.operators import slice_to_tensor
 
 
 def parse_subsref_arr_slice(sub, is_mono=False):
@@ -104,9 +104,9 @@ def commit_subsref_or_subsasgn_arr(
     (*_, n_rows, n_cols) = sub_row.shape
     for i_row in range(n_rows):
       for i_col in range(n_cols):
-        node[sub_row][sub_col] = assign_rhs[i_row][i_col]
+        node[sub_row[i_row, i_col]][sub_col[i_row, i_col]] = assign_rhs[i_row][i_col]
     return node
-  
+
   # else assign_rhs is none
   if isinstance(node, torch.Tensor):
     return node[sub_row, sub_col]

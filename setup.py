@@ -1,14 +1,15 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name="matrace",
     version="0.1.0",
     package_dir={"": "."},
-    packages=['matrace'],
+    packages=find_packages(exclude=["tests*"]),
+    python_requires=">=3.10",
     install_requires=[
         "miss_hit_core",
         "torch",
-        "numpy"
+        "numpy",
     ],
     extras_require={
         "dev": [

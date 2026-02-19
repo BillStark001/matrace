@@ -6,7 +6,7 @@ This document catalogs known issues, limitations, and potential bugs in the matr
 
 ### 1. Copy-on-Write Not Implemented
 
-**Location**: `exec_flow.py`, `mat_subs.py`
+**Location**: `matrace/interpreter/executor.py`, `matrace/stdlib/indexing.py`
 
 **Issue**: MATLAB uses copy-on-write semantics for efficiency, but matrace does not implement this optimization.
 
@@ -30,7 +30,7 @@ B(1,1) = 10;    % Now B is a copy
 
 ### 2. N-Dimensional Array Support Limited
 
-**Location**: `mat_subs.py`, `mat_opr.py`
+**Location**: `matrace/stdlib/indexing.py`, `matrace/stdlib/matrix.py`
 
 **Issue**: All matrices internally represented as 2D tensors.
 
@@ -51,7 +51,7 @@ A(1,2,3)            % May not work
 
 ### 3. Function Handle Support Missing
 
-**Location**: `exec_flow.py`
+**Location**: `matrace/interpreter/executor.py`
 
 **Issue**: Anonymous functions and function handles not implemented.
 
@@ -71,7 +71,7 @@ y = f(5);           % Will fail
 
 ### 4. No Static Type Checking
 
-**Location**: All execution modules
+**Location**: All execution modules (`matrace/interpreter/`)
 
 **Issue**: Types determined dynamically at runtime; no static analysis.
 
@@ -88,7 +88,7 @@ y = f(5);           % Will fail
 
 ### 5. Type Coercion Inconsistencies
 
-**Location**: `exec_flow.py`, `opr.py`
+**Location**: `matrace/interpreter/executor.py`, `matrace/stdlib/operators.py`
 
 **Issue**: Type coercion rules may differ from MATLAB.
 
@@ -110,7 +110,7 @@ C = A + B;  % Type coercion may differ from MATLAB
 
 ### 6. Complex Logical Indexing
 
-**Location**: `mat_subs.py`
+**Location**: `matrace/stdlib/indexing.py`
 
 **Issue**: Advanced logical indexing patterns may not work correctly.
 
@@ -126,7 +126,7 @@ A([true false true]) = B;  % Logical index assignment
 
 ### 7. End Keyword Context Sensitivity
 
-**Location**: `exec_flow.py` (MatrixContext)
+**Location**: `matrace/interpreter/executor.py` (MatrixContext)
 
 **Issue**: `end` keyword relies on context manager stack; nested indexing may confuse it.
 
@@ -141,7 +141,7 @@ A(1:end, B(end))  % Nested 'end' may use wrong context
 
 ### 8. Linear Indexing Column-Major Conversion
 
-**Location**: `mat_subs.py` line 52-62
+**Location**: `matrace/stdlib/indexing.py`
 
 **Issue**: MATLAB uses column-major linear indexing; conversion to row-major PyTorch may have edge cases.
 
@@ -160,7 +160,7 @@ A([1 3 5])  % Linear indices: 1, 3, 5
 
 ### 9. String Support Incomplete
 
-**Location**: `exec_flow.py` lines 58-61
+**Location**: `matrace/interpreter/executor.py`
 
 **Issue**: String handling is "basic" per code comments.
 
@@ -195,7 +195,7 @@ s3 = [s1 ' ' s2];  % May or may not work
 
 ### 11. SPMD Block Non-Functional
 
-**Location**: `mh/cfg.py` lines 28-29, 36-37
+**Location**: `matrace/ir/cfg.py`
 
 **Issue**: SPMD (Single Program Multiple Data) blocks parsed but not executed in parallel.
 
@@ -213,7 +213,7 @@ end
 
 ### 12. Switch/Case Edge Cases
 
-**Location**: `exec_cfg.py`, `mh/cfg.py`
+**Location**: `matrace/interpreter/cfg_executor.py`, `matrace/ir/cfg.py`
 
 **Issue**: Switch statement implementation may have untested edge cases.
 
@@ -245,7 +245,7 @@ end
 
 ### 14. Variable Scope Memory Leaks
 
-**Location**: `exec_flow.py` (vars dictionary)
+**Location**: `matrace/interpreter/executor.py` (vars dictionary)
 
 **Issue**: Variables not cleaned up after function execution.
 
@@ -257,7 +257,7 @@ end
 
 ### 15. Tensor Cloning Overhead
 
-**Location**: `mat_subs.py` line 98
+**Location**: `matrace/stdlib/indexing.py`
 
 **Issue**: `copy_required` flag triggers tensor cloning, but unclear when this is needed.
 
@@ -275,7 +275,7 @@ if copy_required:
 
 ### 16. Error Messages Poor Quality
 
-**Location**: `helper.py` lines 19-20
+**Location**: `matrace/parser/parser.py` (ModifiedMessageHandler)
 
 **Issue**: Parser errors not user-friendly.
 
@@ -290,14 +290,14 @@ raise Exception(msg.location, msg.message)
 
 ### 17. Missing AST Node Handlers
 
-**Location**: Throughout `exec_flow.py` and `exec_cfg.py`
+**Location**: `matrace/interpreter/executor.py` and `matrace/interpreter/cfg_executor.py`
 
 **Issue**: Many code paths have `assert False, 'TODO'` placeholders.
 
 **Examples**:
-- Line 63 in `exec_flow.py`: Unhandled literal types
-- Line 21 in `opr.py`: Unhandled unary operators
-- Line 73 in `opr.py`: Unhandled binary operators
+- Unhandled literal types in `executor.py`
+- Unhandled unary operators in `stdlib/operators.py`
+- Unhandled binary operators in `stdlib/operators.py`
 
 **Impact**: Unsupported MATLAB syntax causes runtime crashes instead of clear errors
 
@@ -307,7 +307,7 @@ raise Exception(msg.location, msg.message)
 
 ### 18. Matrix Division Implementation
 
-**Location**: `opr.py` lines 39-42
+**Location**: `matrace/stdlib/operators.py`
 
 **Issue**: Matrix division uses `torch.inverse()`, which:
 - Fails for singular matrices
@@ -327,7 +327,7 @@ X = A \ B;       % Should use least-squares, not inverse
 
 ### 19. Matrix Power Integer Casting
 
-**Location**: `opr.py` lines 48-51
+**Location**: `matrace/stdlib/operators.py`
 
 **Issue**: Matrix power assumes integer exponent:
 ```python
@@ -348,7 +348,7 @@ B = A^0.5;  % Should give [[2 0]; [0 3]], may fail
 
 ### 20. Variable Number of Outputs Not Fully Supported
 
-**Location**: `helper.py`, `exec_cfg.py`
+**Location**: `matrace/api/import_func.py`, `matrace/interpreter/cfg_executor.py`
 
 **Issue**: MATLAB functions can have variable number of output arguments; not fully handled.
 
@@ -392,7 +392,7 @@ end
 
 ### 22. Mixed Cell/Matrix Operations
 
-**Location**: `cell_opr.py`, `mat_opr.py`
+**Location**: `matrace/stdlib/cells.py`, `matrace/stdlib/matrix.py`
 
 **Issue**: Boundary between cell arrays and matrices may be unclear.
 
@@ -422,7 +422,7 @@ x = C{1}{1}{1};  % Triple nesting
 
 ### 24. Dynamic Field Names
 
-**Location**: `exec_flow.py` (Dynamic_Selection handling)
+**Location**: `matrace/interpreter/executor.py` (Dynamic_Selection handling)
 
 **Issue**: Dynamic field access `s.(fieldname)` implementation unclear.
 

@@ -8,10 +8,10 @@ import numpy as np
 from miss_hit_core.m_ast import *
 from miss_hit_core.m_ast import Node
 
-from matrace.std.mat_subs import eval_subsref_arr
-from matrace.std.mat_opr import eval_col_cat
-from matrace.std.cell_opr import concat_cells_col, concat_cells_row
-from matrace.std.opr import eval_binary_opr, eval_unary_opr
+from matrace.stdlib.indexing import eval_subsref_arr
+from matrace.stdlib.matrix import eval_col_cat
+from matrace.stdlib.cells import concat_cells_col, concat_cells_row
+from matrace.stdlib.operators import eval_binary_opr, eval_unary_opr
 from matrace.utils.context import ContextManager
 
 
@@ -232,10 +232,11 @@ class CodeExecutor:
     for row_node in node.n_content.l_items:
       if not row_node.l_items:
         items = None  # dummy row
-      items = [
-          self.eval(x, strict_matrix=False)
-          for x in row_node.l_items
-      ]
+      else:
+        items = [
+            self.eval(x, strict_matrix=False)
+            for x in row_node.l_items
+        ]
       row_items.append(items)
 
     return eval_col_cat(row_items, is_cell)

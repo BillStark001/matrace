@@ -1,6 +1,6 @@
 import torch
 
-from matrace.helper import import_matlab_func
+from matrace.api.import_func import import_matlab_func
 
 element_wise_operations = import_matlab_func(
     './tests/matlab_examples/element_wise_operations.m',

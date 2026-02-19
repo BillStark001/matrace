@@ -19,8 +19,9 @@ Matrace is a compiler that converts a numerical computing-oriented subset of MAT
 - ✅ **PyTorch Backend**: All operations mapped to PyTorch tensors for GPU acceleration
 - ✅ **Dynamic Interpretation**: Handles dynamically-typed MATLAB code at runtime
 - ✅ **Function Injection**: Seamlessly inject Python/PyTorch functions into MATLAB scope
-- 🚧 **Type Annotations** (Planned): JSDoc-style type hints for optimization
-- 🚧 **Static Compilation** (Planned): Generate optimized code when types are known
+- ✅ **Type Hierarchy**: Rich type system (`ScalarType`, `MatrixType`, `VectorType`, `CellType`, `StructType`, `FunctionType`, `AnyType`) with extensible registry
+- ✅ **Type Annotations**: JSDoc-style `@param`/`@returns` hints in MATLAB comments; automatically extracted when importing
+- 🚧 **Static Compilation** (Planned): Generate optimized code when types are fully known
 
 ## Quick Start
 
@@ -75,9 +76,38 @@ func = import_matlab_func(
     scope={
         'sum': lambda x: torch.sum(x).unsqueeze(0).unsqueeze(0),
         'sqrt': torch.sqrt,
-        'sin': torch.sin
+        'sin': torch.sin,
     }
 )
+```
+
+### Type Annotations
+
+Annotate MATLAB parameters with JSDoc-style comments; matrace extracts them automatically:
+
+```matlab
+% @param {matrix<3,3> float} A - coefficient matrix
+% @param {vector<any> float} b
+% @returns {vector<any> float}
+function x = solve(A, b)
+    x = A \ b;
+end
+```
+
+```python
+from matrace import import_matlab_func, MatrixType, VectorType
+
+# Access the parsed AST, type annotations, and the callable
+ast_node, annotation, solve = import_matlab_func('solve.m', return_ast=True)
+print(annotation.params['A'])   # MatrixType(dtype='float', rows=3, cols=3)
+print(annotation.returns[0])    # VectorType(dtype='float', length=None)
+```
+
+You can also parse type strings directly:
+
+```python
+from matrace import parse_type_str
+t = parse_type_str("cell<scalar float>")   # CellType(element=ScalarType(dtype='float'))
 ```
 
 ### Multiple Functions
@@ -192,10 +222,13 @@ MATLAB Source → Parser → AST → CFG → Interpreter → PyTorch Ops
 ```
 
 **Key Components**:
-1. **Parser** (`helper.py`): Uses `miss_hit_core` to parse MATLAB
-2. **AST/CFG** (`mh/`): Abstract syntax tree and control flow graph
-3. **Interpreter** (`exec_*.py`): Dynamic code execution engine
-4. **Standard Library** (`std/`): PyTorch implementations of MATLAB operations
+1. **Parser** (`matrace/parser/`): Uses `miss_hit_core` to parse MATLAB into an AST
+2. **IR / CFG** (`matrace/ir/`): Control flow graph and AST visitor utilities
+3. **Interpreter** (`matrace/interpreter/`): Dynamic code execution engine
+4. **Standard Library** (`matrace/stdlib/`): PyTorch implementations of MATLAB operations
+5. **Type System** (`matrace/types/`): Type hierarchy and extensible type registry
+6. **Analysis** (`matrace/analysis/`): JSDoc annotation parser (`parse_type_str`, `extract_func_annotations`)
+7. **Public API** (`matrace/api/`): Stable, well-defined entry point (`import_matlab_func`)
 
 For detailed architecture, see [Architecture Documentation](docs/architecture.md).
 
@@ -218,17 +251,21 @@ Example test files:
 - `tests/test_flow.py`: Control flow (if/for/while)
 - `tests/test_cell.py`: Cell array operations
 - `tests/test_ode.py`: ODE integration examples
+- `tests/test_types.py`: Type hierarchy, type-string parser, and annotation extraction
 
 ## Roadmap
 
-### Current Status (v0.1.0)
+### Current Status (v0.1.x)
 - ✅ Dynamic interpretation of MATLAB subset
 - ✅ PyTorch tensor operations
 - ✅ Basic control flow support
+- ✅ Modular sub-package architecture (`parser`, `ir`, `interpreter`, `stdlib`, `types`, `analysis`, `api`)
+- ✅ Type hierarchy (`ScalarType`, `MatrixType`, `VectorType`, `CellType`, `StructType`, `FunctionType`, `AnyType`)
+- ✅ JSDoc annotation parser (`@param`/`@returns` → `FuncAnnotation`)
 
 ### Planned Features
-- **Type Annotations**: JSDoc-style type hints in MATLAB comments
-- **Static Compilation**: Generate optimized PyTorch code when types are known
+- **Type Inference**: Propagate types through unannotated code automatically
+- **Static Compilation**: Generate optimized PyTorch code when types are fully known
 - **Copy-on-Write Analysis**: Optimize memory usage
 - **Module System**: Multi-file project support
 - **Class Support**: Basic MATLAB classes (no inheritance initially)

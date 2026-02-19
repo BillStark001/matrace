@@ -12,7 +12,7 @@ def concat_cells_row(items: List[List[List[Any]] | Any]) -> List[List[Any]]:
   for item in items:
     item_row_number = len(item) if isinstance(item, list) else 1
     assert row_number == item_row_number
-    
+
   new_cell = []
   for row_index in range(row_number):
     new_row = []

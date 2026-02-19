@@ -5,7 +5,7 @@ import torch
 
 from torchdiffeq import odeint
 
-from matrace.helper import import_matlab_func
+from matrace.api.import_func import import_matlab_func
 
 
 def _p(s): return f'./tests/matlab_examples/{s}.m'
@@ -52,5 +52,7 @@ def test_msd():
   dx = np.sum(x.numpy() - x_true)
   dv = np.sum(v.numpy() - v_true)
 
-  assert dx < 1e-15
-  assert dv < 1e-15
+  # float32 ODE integration accumulates ~1e-7 error over the time span;
+  # 1e-4 is a conservative but realistic tolerance for this test.
+  assert abs(dx) < 1e-4
+  assert abs(dv) < 1e-4

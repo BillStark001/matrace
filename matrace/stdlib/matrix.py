@@ -4,8 +4,8 @@ import torch
 
 from miss_hit_core.m_ast import Row, Row_List, Matrix_Expression, Cell_Expression
 
-from matrace.std.cell_opr import concat_cells_row, concat_cells_col
-from matrace.std.opr import slice_to_tensor
+from matrace.stdlib.cells import concat_cells_row, concat_cells_col
+from matrace.stdlib.operators import slice_to_tensor
 
 Evaluated: TypeAlias = Any
 
@@ -80,13 +80,13 @@ def eval_col_cat(rows_raw: List[List[Evaluated]], is_cell=False) -> Evaluated:
     # else it is already a tensor
     return row_val
   # else
-  
+
   if is_cell:
     concatenated_rows = []
     for row, _ in rows:
       concatenated_rows.append(concat_cells_row(row))
     return concat_cells_col(concatenated_rows)
-  
+
   rows_elems = [x[0] for x in rows]
   any_cell_rows = any(x[1][0] for x in rows)
   any_mat_rows = any(not x[1][0] for x in rows)
