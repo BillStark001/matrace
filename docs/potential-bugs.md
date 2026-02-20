@@ -149,7 +149,7 @@ A(1:end, B(end))  % Nested 'end' may use wrong context
 ```matlab
 A = [1 2 3; 4 5 6];
 A([1 3 5])  % Linear indices: 1, 3, 5
-% MATLAB result: [1 5 3] (column-major)
+% MATLAB result: [1 2 3] (column-major: A(1)=1, A(3)=2, A(5)=3)
 ```
 
 **Testing Status**: Basic cases work; complex patterns untested

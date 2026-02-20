@@ -36,18 +36,26 @@ def eval_binary_opr(opr: str, elem1: torch.Tensor, elem2: torch.Tensor) -> torch
   elif opr in ('.\\', 'ldivide'):
     return elem2 / elem1
   elif opr in ('/', 'mrdivide'):
-    return elem1 @ torch.inverse(elem2)
+    # X * B = A  =>  B^T * X^T = A^T  =>  X = solve(B^T, A^T)^T
+    return torch.linalg.solve(elem2.mT, elem1.mT).mT
   elif opr in ('\\', 'mldivide'):
-    return torch.inverse(elem2) @ elem1
+    # A * X = B  =>  X = solve(A, B)
+    return torch.linalg.solve(elem1, elem2)
 
   elif opr in ('.^', 'power'):
     return elem1 ** elem2
   elif opr in ('^', 'mpower'):
     assert elem2.numel() == 1
-    elem2_int = elem2[0][0]
+    elem2_val = elem2.item()
     # pylint: disable=E1102
-    return elem1 ** elem2_int if elem1.numel() == 1 else \
-        torch.linalg.matrix_power(elem1, elem2_int)
+    if elem1.numel() == 1:
+      return elem1 ** elem2_val
+    if elem2_val != int(elem2_val):
+      raise NotImplementedError(
+          f'Matrix power with fractional exponent {elem2_val} is not supported; '
+          'use element-wise power (.^) for component-wise exponentiation.'
+      )
+    return torch.linalg.matrix_power(elem1, int(elem2_val))
 
   elif opr in ('<', 'lt'):
     return elem1 < elem2
