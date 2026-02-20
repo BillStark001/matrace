@@ -14,7 +14,8 @@ import json
 def _get_func(cu, fname: str | None, scope: dict, content: str):
   func_ast = get_function_by_name(cu, name=fname)
   fname_pretty = json.dumps(fname) if fname is not None else '<default>'
-  assert func_ast is not None, f'Function not found: {fname_pretty}'
+  if func_ast is None:
+    raise ValueError(f'Function not found: {fname_pretty}')
 
   annotation = extract_func_annotations(func_ast, content)
 

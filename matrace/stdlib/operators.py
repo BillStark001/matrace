@@ -17,7 +17,7 @@ def eval_unary_opr(opr: str, elem: torch.Tensor) -> torch.Tensor:
     return -elem
   elif opr in ('~', '!', 'not'):
     return torch.logical_not(elem)
-  assert False, 'TODO'
+  raise NotImplementedError(f'Unhandled unary operator: {opr!r}')
 
 
 def eval_binary_opr(opr: str, elem1: torch.Tensor, elem2: torch.Tensor) -> torch.Tensor:
@@ -45,7 +45,10 @@ def eval_binary_opr(opr: str, elem1: torch.Tensor, elem2: torch.Tensor) -> torch
   elif opr in ('.^', 'power'):
     return elem1 ** elem2
   elif opr in ('^', 'mpower'):
-    assert elem2.numel() == 1
+    if elem2.numel() != 1:
+      raise ValueError(
+          f'Matrix power exponent must be a scalar, got tensor with {elem2.numel()} elements.'
+      )
     elem2_val = elem2.item()
     # pylint: disable=E1102
     if elem1.numel() == 1:
@@ -77,7 +80,7 @@ def eval_binary_opr(opr: str, elem1: torch.Tensor, elem2: torch.Tensor) -> torch
   elif opr in ('|', '||', 'or'):
     return torch.logical_or(elem1, elem2)
 
-  assert False, 'TODO'
+  raise NotImplementedError(f'Unhandled binary operator: {opr!r}')
 
 def slice_to_tensor(sub: slice, end_len=1):
   return torch.arange(

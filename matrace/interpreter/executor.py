@@ -129,7 +129,9 @@ class CodeExecutor:
           eval_subsref_arr(lhs_value, args_object, rhs_i)
 
       else:
-        assert False, 'WTF'
+        raise RuntimeError(
+            f'subsasgn: unhandled LHS node type: {type(lhs_i).__name__!r}'
+        )
 
   def eval(
       self,
@@ -140,7 +142,10 @@ class CodeExecutor:
   ) -> Evaluated:
 
     # literal and oprs
-    assert isinstance(node, Expression), str(node)
+    if not isinstance(node, Expression):
+      raise TypeError(
+          f'eval: expected an Expression node, got {type(node).__name__!r}: {node}'
+      )
 
     if isinstance(node, Literal):
       return expr_literal(node, strict_matrix=strict_matrix)
@@ -216,7 +221,9 @@ class CodeExecutor:
     if isinstance(node, (Matrix_Expression, Cell_Expression)):
       return self.eval_cols(node)
 
-    assert False, 'TODO: ' + node.__class__.__name__
+    raise NotImplementedError(
+        f'eval: unhandled expression node type: {type(node).__name__!r}'
+    )
 
   def eval_cols(self, node: Matrix_Expression | Cell_Expression) -> Evaluated:
     is_cell = isinstance(node, Cell_Expression)
