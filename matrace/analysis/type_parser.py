@@ -295,9 +295,14 @@ def _find_matching_brace(s: str, start: int) -> int:
     """Return the index of the ``}`` that closes the ``{`` at *start*.
 
     Raises:
-        ValueError: If the braces are not balanced.
+        ValueError: If *start* does not point to a ``{``, or if the braces
+            are not balanced.
     """
-    assert s[start] == "{"
+    if s[start] != "{":
+      raise ValueError(
+          f'_find_matching_brace: expected "{{" at index {start}, '
+          f'got {s[start]!r} in {s!r}'
+      )
     depth = 1
     i = start + 1
     while i < len(s):

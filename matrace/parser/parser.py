@@ -10,7 +10,10 @@ from miss_hit_core.m_parser import MATLAB_Parser
 class ModifiedMessageHandler(Message_Handler):
 
   def register_message(self, msg):
-    assert isinstance(msg, Message)
+    if not isinstance(msg, Message):
+      raise TypeError(
+          f'register_message: expected a Message instance, got {type(msg).__name__!r}'
+      )
     self.process_message(msg)
     if msg.fatal:
       raise Exception(msg.location, msg.message)

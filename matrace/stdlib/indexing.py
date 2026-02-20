@@ -31,7 +31,9 @@ def parse_subsref_arr_slice(sub, is_mono=False):
       sub_int = sub_int.transpose(-1, -2).contiguous().view((-1))
     return sub_int
 
-  assert False, 'TODO'
+  raise NotImplementedError(
+      f'Unsupported subscript type in array indexing: {type(sub).__name__!r}'
+  )
 
 
 def gen_torch_slice_by_subsref_slice(
@@ -70,7 +72,10 @@ def gen_torch_slice_by_subsref_slice(
     sub_row = xx
 
   else:
-    assert False, 'TODO'
+    raise NotImplementedError(
+        f'Array indexing with {len(subs_parsed)} subscripts is not supported; '
+        'only 1 (linear) or 2 (row, column) subscripts are allowed.'
+    )
 
   return sub_row, sub_col
 
@@ -83,7 +88,10 @@ def commit_subsref_or_subsasgn_arr(
 ):
 
   if not subs_parsed:
-    assert assign_rhs is None, 'WTF'
+    if assign_rhs is not None:
+      raise ValueError(
+          'commit_subsref_or_subsasgn_arr: assign_rhs must be None when no subscripts are given.'
+      )
     return node
 
   sub_row, sub_col = gen_torch_slice_by_subsref_slice(

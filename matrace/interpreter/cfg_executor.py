@@ -42,8 +42,49 @@ NO_OPR_TYPES = {
     CFGType.WHILE_ENTRY,
     CFGType.WHILE_CONTINUE,
     CFGType.WHILE_EXIT,
+
+    # Switch: action routing is handled in get_next_node; exec is a no-op
+    CFGType.SWITCH_ACTION_ENTRY,
+    CFGType.SWITCH_EXIT,
+
+    # SPMD: executed serially (no parallel support)
+    CFGType.SPMD_ENTRY,
+    CFGType.SPMD_EXIT,
+
+    # Try/catch: exceptions are not caught; bodies execute inline
+    CFGType.TRY_ENTRY,
+    CFGType.TRY_CATCH,
+    CFGType.TRY_EXIT,
+
+    # Break/continue/return: control flow is encoded in CFG edges
+    CFGType.BREAK,
+    CFGType.CONTINUE,
+    CFGType.RETURN,
 }
-# TODO add all types
+
+
+def _switch_match(switch_val: Any, case_val: Any) -> bool:
+  """Return True when *switch_val* matches *case_val* using MATLAB semantics.
+
+  * String / char-array equality is case-sensitive.
+  * Cell case values ``{v1, v2, ...}`` match when any element matches.
+  * Numeric scalars are compared element-wise.
+  """
+  # Cell case: {1, 2, 3} — match any element
+  if isinstance(case_val, list):
+    flat = [item for row in case_val for item in row]
+    return any(_switch_match(switch_val, v) for v in flat)
+  if isinstance(switch_val, str) and isinstance(case_val, str):
+    return switch_val == case_val
+  if isinstance(switch_val, torch.Tensor) and isinstance(case_val, torch.Tensor):
+    try:
+      return bool((switch_val == case_val).all())
+    except (TypeError, RuntimeError):
+      return False
+  try:
+    return switch_val == case_val
+  except (TypeError, AttributeError):
+    return False
 
 
 class CodeControlExecutor(CodeExecutor):
@@ -51,6 +92,8 @@ class CodeControlExecutor(CodeExecutor):
   def __init__(self):
     super().__init__()
     self.for_loop = ContextManager(default_for)
+    # Stack of evaluated switch-expression values for nested switch support
+    self._switch_val_stack: List[Any] = []
 
   def eval(
     self, node: Expression | str,
@@ -59,7 +102,7 @@ class CodeControlExecutor(CodeExecutor):
     if isinstance(node, str):
       if node == 'FOR_HAS_NEXT':
         return self.for_loop.current.has_next
-      assert False, 'TODO'
+      raise NotImplementedError(f'Unsupported string sentinel in eval: {node!r}')
     return super().eval(node, *args, **kwargs)
 
   def exec_node(
@@ -95,11 +138,15 @@ class CodeControlExecutor(CodeExecutor):
     elif t == CFGType.FOR_EXIT:
       self.for_loop.pop()
 
+    elif t == CFGType.SWITCH_ENTRY:
+      stmt = cast(Switch_Statement, node.stmt_list)
+      self._switch_val_stack.append(self.eval(stmt.n_expr))
+
     elif t in NO_OPR_TYPES:
       pass
 
     else:
-      assert False, 'TODO'
+      raise NotImplementedError(f'Unsupported CFG node type: {t}')
 
   def get_next_node(
       self,
@@ -107,6 +154,29 @@ class CodeControlExecutor(CodeExecutor):
       cfg: CFG,
   ) -> int:
     opts = cfg.next_node(node_id)
+    node = cfg.node(node_id)
+
+    # Switch: compare the stored switch value against each case expression
+    if node.type == CFGType.SWITCH_ENTRY:
+      switch_val = self._switch_val_stack[-1] if self._switch_val_stack else None
+      otherwise_id = None
+      for opt_id, cond in opts:
+        if cond is None:
+          if otherwise_id is None:
+            otherwise_id = opt_id  # `otherwise` clause or no-match fallthrough
+        else:
+          case_val = self.eval(cond)
+          if _switch_match(switch_val, case_val):
+            return opt_id
+      # No case matched — use `otherwise` (or no-match fallthrough) if available
+      if otherwise_id is not None:
+        return otherwise_id
+      return STOP_ITR
+
+    # Pop the switch value when leaving the switch block
+    if node.type == CFGType.SWITCH_EXIT and self._switch_val_stack:
+      self._switch_val_stack.pop()
+
     for opt_id, cond in opts:  # evaluate all edges by precedence
       if cond is None:  # unconditional jump
         return opt_id
@@ -151,7 +221,7 @@ def exec_func(
     ex.exec_node(cur_node)
     next_node = ex.get_next_node(cur_node_id, cfg)
     if next_node == STOP_ITR:
-      assert False, 'Should not happen'
+      raise RuntimeError('CFG execution reached an unexpected dead end.')
     cur_node_id = next_node
 
   # gather and return outputs

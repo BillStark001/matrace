@@ -10,7 +10,7 @@ from miss_hit_core.m_ast import Node
 
 from matrace.stdlib.indexing import eval_subsref_arr
 from matrace.stdlib.matrix import eval_col_cat
-from matrace.stdlib.cells import concat_cells_col, concat_cells_row
+from matrace.stdlib.cells import concat_cells_col, concat_cells_row, eval_subsref_cell, subsasgn_cell
 from matrace.stdlib.operators import eval_binary_opr, eval_unary_opr
 from matrace.utils.context import ContextManager
 
@@ -43,11 +43,6 @@ def subsref_obj(obj: Evaluated, target: str | Evaluated, is_static=False) -> Eva
   return getattr(obj, target)
 
 
-# TODO this is not correct
-def subsref_list(obj: Evaluated, target: Evaluated) -> Evaluated:
-  return obj[*target]
-
-
 def expr_literal(node: Literal, strict_matrix=True) -> Evaluated:
   ret = None
   if isinstance(node, Number_Literal):
@@ -60,7 +55,7 @@ def expr_literal(node: Literal, strict_matrix=True) -> Evaluated:
   elif isinstance(node, String_Literal):
     ret = str(node.t_string.value)
   else:
-    assert False, 'TODO'
+    raise NotImplementedError(f'Unsupported literal type: {type(node).__name__}')
   return ret
 
 
@@ -127,15 +122,16 @@ class CodeExecutor:
         lhs_value = self.eval(lhs_i.n_ident)
 
         if is_cell:
-          # TODO this is not correct
-          lhs_value[*args_object] = rhs_i
+          subsasgn_cell(lhs_value, args_object, rhs_i)
         else:
           # create a temporary variable
           # evaluate the subsref at last
           eval_subsref_arr(lhs_value, args_object, rhs_i)
 
       else:
-        assert False, 'WTF'
+        raise RuntimeError(
+            f'subsasgn: unhandled LHS node type: {type(lhs_i).__name__!r}'
+        )
 
   def eval(
       self,
@@ -146,7 +142,10 @@ class CodeExecutor:
   ) -> Evaluated:
 
     # literal and oprs
-    assert isinstance(node, Expression), str(node)
+    if not isinstance(node, Expression):
+      raise TypeError(
+          f'eval: expected an Expression node, got {type(node).__name__!r}: {node}'
+      )
 
     if isinstance(node, Literal):
       return expr_literal(node, strict_matrix=strict_matrix)
@@ -211,7 +210,7 @@ class CodeExecutor:
 
       # TODO strict matrix adaption
 
-      return (subsref_list if is_cell else (
+      return (eval_subsref_cell if is_cell else (
           func_call if is_call else eval_subsref_arr
       ))(
           # this must be a name, i.e. identifier, reference, ...
@@ -222,7 +221,9 @@ class CodeExecutor:
     if isinstance(node, (Matrix_Expression, Cell_Expression)):
       return self.eval_cols(node)
 
-    assert False, 'TODO: ' + node.__class__.__name__
+    raise NotImplementedError(
+        f'eval: unhandled expression node type: {type(node).__name__!r}'
+    )
 
   def eval_cols(self, node: Matrix_Expression | Cell_Expression) -> Evaluated:
     is_cell = isinstance(node, Cell_Expression)

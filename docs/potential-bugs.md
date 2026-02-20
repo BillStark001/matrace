@@ -2,6 +2,9 @@
 
 This document catalogs known issues, limitations, and potential bugs in the matrace codebase.
 
+> **Change log** — items marked ✅ **Fixed** or 🎯 **By design** have been
+> resolved in recent development.  See each entry for details.
+
 ## Critical Issues
 
 ### 1. Copy-on-Write Not Implemented
@@ -139,47 +142,54 @@ A(1:end, B(end))  % Nested 'end' may use wrong context
 
 **Priority**: Low - uncommon case
 
-### 8. Linear Indexing Column-Major Conversion
+### 8. Linear Indexing Column-Major Conversion ✅ Fixed
 
 **Location**: `matrace/stdlib/indexing.py`
 
-**Issue**: MATLAB uses column-major linear indexing; conversion to row-major PyTorch may have edge cases.
+**Issue**: MATLAB uses column-major linear indexing; the documented expected
+result was incorrect and test coverage was missing.
 
-**Complex Example**:
+**Fix applied**:
+- Corrected the example in this document (`[1 5 3]` → `[1 2 3]`).
+- Added tests in `tests/test_slice.py` that lock in column-major linear
+  indexing semantics for row vectors, column vectors, and subsets.
+
 ```matlab
 A = [1 2 3; 4 5 6];
 A([1 3 5])  % Linear indices: 1, 3, 5
-% MATLAB result: [1 5 3] (column-major)
+% MATLAB result: [1 2 3] (column-major: A(1)=1, A(3)=2, A(5)=3)
 ```
 
-**Testing Status**: Basic cases work; complex patterns untested
+**Testing Status**: Basic and subset cases covered by tests.
 
 **Priority**: Medium - core feature
 
 ## String Handling
 
-### 9. String Support Incomplete
+### 9. String Support ✅ Fixed (concatenation)
 
-**Location**: `matrace/interpreter/executor.py`
+**Location**: `matrace/stdlib/matrix.py`
 
-**Issue**: String handling is "basic" per code comments.
+**Previous issue**: Horizontal char-array concatenation `[s1 ' ' s2]` was
+not guaranteed to work.
+
+**Fix applied** (`eval_row_cat`): When any item in a matrix row is a Python
+`str`, all items are joined as strings before any tensor handling, making
+`[s1 ' ' s2]` produce the expected concatenated string.
+
+**Remaining limitation**: String *methods* (e.g. `strfind`, `strcmp`,
+`strsplit`) are not implemented and must be injected via the `scope`
+parameter.
 
 **Current Support**:
-- ✅ String literals
-- ✅ Char arrays
-- ❓ String concatenation (unclear)
-- ❌ String methods (e.g., `strfind`, `strcmp`)
-
-**Example Unclear Behavior**:
-```matlab
-s1 = 'hello';
-s2 = 'world';
-s3 = [s1 ' ' s2];  % May or may not work
-```
+- ✅ String literals (`"text"`)
+- ✅ Char arrays (`'text'`)
+- ✅ String concatenation (`[s1 ' ' s2]`)
+- ❌ String methods — inject via `scope`
 
 **Priority**: Low - numerical focus
 
-### 10. String vs Char Array Confusion
+### 10. String vs Char Array Confusion 🎯 By design
 
 **Issue**: Implementation treats both `String_Literal` and `Char_Array_Literal` as Python strings.
 
@@ -187,9 +197,16 @@ s3 = [s1 ' ' s2];  % May or may not work
 - `'text'` is char array
 - `"text"` is string object (different type)
 
-**Potential Issues**: String-specific MATLAB functions may not work
+**Current Design Decision**: Both literal forms map to a plain Python `str`.
+This is intentional for matrace's numerical focus — string-specific MATLAB
+functions are not a priority.  The interpreter will not distinguish between
+the two types.
 
-**Priority**: Low - minor compatibility issue
+**Known Impact**: String-specific MATLAB functions (e.g. `regexp`,
+`strsplit`, `num2str`) are not implemented and will require injection via
+the `scope` parameter.
+
+**Priority**: Low — by design; no change planned
 
 ## Control Flow
 
@@ -211,20 +228,28 @@ end
 
 **Priority**: Low - niche feature
 
-### 12. Switch/Case Edge Cases
+### 12. Switch/Case ✅ Fixed
 
 **Location**: `matrace/interpreter/cfg_executor.py`, `matrace/ir/cfg.py`
 
-**Issue**: Switch statement implementation may have untested edge cases.
+**Previous issues**:
+- Switch statement entirely unhandled (`assert False`).
+- No fallthrough when no case matched and no `otherwise` clause.
 
-**Potential Issues**:
-- Multiple case values: `case {1, 2, 3}`
-- String cases
-- Fall-through behavior
+**Fixes applied**:
+- `process_switch_statement` (`cfg.py`): adds an unconditional fallthrough
+  edge to `end_switch` when no `otherwise` clause is present.
+- `exec_node` (`cfg_executor.py`): `SWITCH_ENTRY` now evaluates and pushes
+  the switch expression value onto a stack.
+- `get_next_node` (`cfg_executor.py`): overridden for `SWITCH_ENTRY` to
+  compare the stored value against each case expression using
+  `_switch_match`, which handles numeric equality, string equality, and
+  cell-set membership (`case {1, 2, 3}`).
+- `SWITCH_ACTION_ENTRY`, `SWITCH_EXIT` added to `NO_OPR_TYPES`.
 
-**Testing Status**: Basic cases tested; complex patterns unknown
+**Testing**: covered by `tests/test_strings_cells.py::TestSwitchStatement`.
 
-**Priority**: Low - uncommon construct
+**Priority**: ✅ resolved
 
 ## Memory and Performance
 
@@ -288,61 +313,80 @@ raise Exception(msg.location, msg.message)
 
 **Priority**: Medium - usability issue
 
-### 17. Missing AST Node Handlers
+### 17. Missing AST Node Handlers ✅ Fixed
 
-**Location**: `matrace/interpreter/executor.py` and `matrace/interpreter/cfg_executor.py`
+**Location**: `matrace/interpreter/executor.py`, `matrace/interpreter/cfg_executor.py`, `matrace/stdlib/operators.py`
 
-**Issue**: Many code paths have `assert False, 'TODO'` placeholders.
+**Previous issue**: Many code paths had bare `assert False, 'TODO'`
+placeholders that:
+- Could be silently disabled with Python's `-O` flag.
+- Produced unhelpful `AssertionError` instead of a clear error type.
 
-**Examples**:
-- Unhandled literal types in `executor.py`
-- Unhandled unary operators in `stdlib/operators.py`
-- Unhandled binary operators in `stdlib/operators.py`
+**Fixes applied** — all `assert False` replaced with proper exceptions:
 
-**Impact**: Unsupported MATLAB syntax causes runtime crashes instead of clear errors
+| Location | Old | New |
+|---|---|---|
+| `stdlib/operators.py` — `eval_unary_opr` fallthrough | `assert False, 'TODO'` | `NotImplementedError` |
+| `stdlib/operators.py` — `eval_binary_opr` fallthrough | `assert False, 'TODO'` | `NotImplementedError` |
+| `stdlib/operators.py` — `mpower` scalar check | `assert elem2.numel() == 1` | `ValueError` |
+| `stdlib/indexing.py` — `parse_subsref_arr_slice` fallthrough | `assert False, 'TODO'` | `NotImplementedError` |
+| `stdlib/indexing.py` — `gen_torch_slice_by_subsref_slice` >2 subs | `assert False, 'TODO'` | `NotImplementedError` |
+| `stdlib/indexing.py` — empty-subs invariant | `assert assign_rhs is None, 'WTF'` | `ValueError` |
+| `stdlib/cells.py` — `concat_cells_row` row-count mismatch | `assert row_number == item_row_number` | `ValueError` |
+| `stdlib/structs.py` — `create_struct` key-type check | `assert isinstance(args[i], str)` | `TypeError` |
+| `interpreter/executor.py` — `eval` type guard | `assert isinstance(node, Expression)` | `TypeError` |
+| `interpreter/executor.py` — `subsasgn` LHS fallthrough | `assert False, 'WTF'` | `ValueError` |
+| `interpreter/executor.py` — `eval` expression fallthrough | `assert False, 'TODO: ...'` | `NotImplementedError` |
+| `interpreter/executor.py` — `expr_literal` fallthrough | `assert False, 'TODO'` | `NotImplementedError` |
+| `interpreter/cfg_executor.py` — unhandled CFG node | `assert False, 'TODO'` | `NotImplementedError` |
+| `interpreter/cfg_executor.py` — CFG dead-end | `assert False, 'Should not happen'` | `RuntimeError` |
+| `interpreter/cfg_executor.py` — unknown string sentinel | `assert False, 'TODO'` | `NotImplementedError` |
+| `api/import_func.py` — function not found | `assert func_ast is not None` | `ValueError` |
+| `parser/parser.py` — message type guard | `assert isinstance(msg, Message)` | `TypeError` |
+| `analysis/type_parser.py` — brace precondition | `assert s[start] == "{"` | `ValueError` |
 
-**Priority**: Medium - affects robustness
+**Priority**: ✅ resolved
 
 ## Operator Issues
 
-### 18. Matrix Division Implementation
+### 18. Matrix Division Implementation ✅ Fixed
 
 **Location**: `matrace/stdlib/operators.py`
 
-**Issue**: Matrix division uses `torch.inverse()`, which:
-- Fails for singular matrices
-- Numerically unstable
-- Slow for large matrices
+**Previous issue**: Matrix division used `torch.inverse()`, which fails for
+singular matrices and is numerically unstable.
 
-**Better Alternative**: Use `torch.linalg.solve()` or `torch.linalg.lstsq()`
+**Fix applied**: Both `mrdivide` (`/`) and `mldivide` (`\`) now use
+`torch.linalg.solve()`:
 
-**Example Problem**:
-```matlab
-A = [1 2; 2 4];  % Singular matrix
-B = [1; 2];
-X = A \ B;       % Should use least-squares, not inverse
-```
-
-**Priority**: High - correctness and numerical stability
-
-### 19. Matrix Power Integer Casting
-
-**Location**: `matrace/stdlib/operators.py`
-
-**Issue**: Matrix power assumes integer exponent:
 ```python
-elem2_int = elem2[0][0]
+# mrdivide: X * B = A  →  B^T * X^T = A^T  →  X = solve(B^T, A^T)^T
+return torch.linalg.solve(elem2.mT, elem1.mT).mT
+
+# mldivide: A * X = B  →  X = solve(A, B)
+return torch.linalg.solve(elem1, elem2)
 ```
 
-**Potential Bug**: Fractional exponents may be truncated
+**Testing**: covered by `tests/test_math.py::test_mldivide_*` and `test_mrdivide_*`.
 
-**Example**:
-```matlab
-A = [4 0; 0 9];
-B = A^0.5;  % Should give [[2 0]; [0 3]], may fail
-```
+**Priority**: ✅ resolved
 
-**Priority**: Medium - fractional powers less common
+### 19. Matrix Power Integer Casting ✅ Fixed
+
+**Location**: `matrace/stdlib/operators.py`
+
+**Previous issue**: `elem2[0][0]` returned a 0-d tensor incompatible with
+`torch.linalg.matrix_power`; fractional exponents were silently truncated.
+
+**Fix applied**:
+- `elem2.item()` used to extract a Python scalar.
+- Non-integer matrix exponents now raise `NotImplementedError` with a
+  descriptive message suggesting `.^` for element-wise exponentiation.
+- Scalar `^` fractional exponents continue to work.
+
+**Testing**: covered by `tests/test_math.py::test_matrix_power_*`.
+
+**Priority**: ✅ resolved
 
 ## Function Call Issues
 
@@ -390,64 +434,101 @@ end
 
 ## Cell Array Issues
 
-### 22. Mixed Cell/Matrix Operations
+### 22. Mixed Cell/Matrix Operations ✅ Fixed
 
 **Location**: `matrace/stdlib/cells.py`, `matrace/stdlib/matrix.py`
 
-**Issue**: Boundary between cell arrays and matrices may be unclear.
+**Previous issue**: `[C{:}]` cell expansion into a matrix did not work.
 
-**Example**:
+**Fix applied**:
+- `CellExpansion` class added to `cells.py`; `eval_subsref_cell` returns a
+  `CellExpansion` when indexed with `{:}` (colon), containing all elements
+  in column-major order.
+- `eval_row_cat` in `matrix.py` expands `CellExpansion` objects before
+  other processing, so `[E{:}]` correctly concatenates all cell elements.
+
+**Example (now working)**:
 ```matlab
 C = {[1 2], [3 4]};
-D = [C{:}];  % Cell expansion - may not work
+D = [C{:}];  % → [[1 2 3 4]]
 ```
 
-**Priority**: Low - mixed usage uncommon
+**Testing**: covered by `tests/test_strings_cells.py::TestCellExpansion`.
 
-### 23. Nested Cell Indexing
+**Priority**: ✅ resolved
 
-**Issue**: Deeply nested cell arrays may have indexing issues.
+### 23. Nested Cell Indexing ✅ Fixed
 
-**Example**:
+**Location**: `matrace/stdlib/cells.py`, `matrace/interpreter/executor.py`
+
+**Previous issue**: Cell indexing used `obj[*target]` which failed for
+anything but trivially-shaped lists.
+
+**Fix applied**:
+- `eval_subsref_cell` in `cells.py`: correct 1-based, column-major linear
+  indexing; two-subscript `{i, j}` access; colon `{:}` expansion.
+- `subsasgn_cell` in `cells.py`: in-place cell element assignment.
+- `eval_col_cat` in `matrix.py`: cell-expression path simplified —
+  builds `List[List[Any]]` directly from evaluated rows, fixing a
+  flat-vs-nested inconsistency that broke single-row cells.
+- `executor.py`: uses `eval_subsref_cell` / `subsasgn_cell` instead of the
+  broken `subsref_list` / direct list-index hack.
+
+**Example (now working)**:
 ```matlab
-C = {{{1}}};
-x = C{1}{1}{1};  % Triple nesting
+C = {{{99}}};
+x = C{1}{1}{1};  % → 99
 ```
 
-**Testing Status**: Unknown
+**Testing**: covered by `tests/test_strings_cells.py::TestNestedCellIndexing`.
 
-**Priority**: Low - deep nesting rare
+**Priority**: ✅ resolved
 
 ## Struct Issues
 
-### 24. Dynamic Field Names
+### 24. Dynamic Field Names ✅ Verified working
 
 **Location**: `matrace/interpreter/executor.py` (Dynamic_Selection handling)
 
-**Issue**: Dynamic field access `s.(fieldname)` implementation unclear.
+**Previous status**: Untested.
 
-**Example**:
+**Current status**: The existing `Dynamic_Selection` read/write paths
+(`getattr`/`setattr` on `DictWrapper`) work correctly for both reading and
+writing.
+
+**Example (working)**:
 ```matlab
 field = 'myfield';
-s.(field) = 42;  % Dynamic field access
+s.myfield = 0;
+s.(field) = 42;   % Dynamic field write
+v = s.(field);    % Dynamic field read  → 42
 ```
 
-**Testing Status**: Unknown
+**Testing**: covered by `tests/test_strings_cells.py::TestDynamicFieldAccess`.
 
-**Priority**: Low - less common pattern
+**Priority**: ✅ resolved
 
-### 25. Struct Arrays Not Fully Tested
+### 25. Struct Arrays — Intentionally Unsupported
 
-**Issue**: Arrays of structures may have issues.
+**Issue**: Arrays of structures (`s(1).field`, `s(2).field`) are not
+supported.
 
-**Example**:
+**Example (unsupported)**:
 ```matlab
 s(1).field = 1;
 s(2).field = 2;
 values = [s.field];  % Array expansion
 ```
 
-**Priority**: Low - advanced feature
+**Design Decision**: Struct *scalars* (single `DictWrapper` objects) are
+supported.  Struct *arrays* require combining tensor indexing with struct
+field access, which conflicts with the current `DictWrapper` implementation
+and is out of scope for matrace's numerical focus.
+
+**Workaround**: Use cell arrays of structs, or pre-allocate individual
+named variables.
+
+**Priority**: Out of scope — not planned
 
 ## General Limitations
 
@@ -477,20 +558,21 @@ values = [s.field];  % Array expansion
 
 ## Testing Gaps
 
-### 29. Limited Test Coverage
+### 29. Test Coverage
 
-**Current Tests**: Basic operations, simple control flow, ODE examples
+**Current Tests**: Basic operations, simple control flow, ODE examples,
+matrix division/power, linear indexing (column-major), string concatenation,
+cell indexing (simple, nested, expansion), switch statement, dynamic struct
+fields.
 
-**Missing Tests**:
-- Edge cases for indexing
-- Complex nested loops
-- Exception handling
-- String operations
-- Cell array operations
-- Struct arrays
+**Still missing**:
+- Edge cases for logical indexing
+- Complex nested loops (`continue` inside `for`)
+- Exception handling (`try/catch`)
+- String methods (injected via scope)
 - Large matrix performance
 
-**Priority**: High - testing is critical
+**Priority**: Medium
 
 ### 30. No Integration Tests
 
@@ -520,40 +602,60 @@ values = [s.field];  % Array expansion
 
 ## Summary by Priority
 
-### High Priority
-1. Copy-on-write not implemented
-2. Matrix division numerical issues
-3. Limited test coverage
+### ✅ Resolved
+- #8  Linear indexing documentation and tests
+- #9  String concatenation
+- #12 Switch/case statement (numeric, string, cell-set, otherwise, fallthrough)
+- #17 All `assert False` / bare assertions replaced with proper exceptions
+- #18 Matrix division numerical stability (`torch.linalg.solve`)
+- #19 Matrix power integer casting (`.item()`, fractional exponent error)
+- #22 Cell expansion `[C{:}]`
+- #23 Nested cell indexing
+- #24 Dynamic struct field access verified
 
-### Medium Priority
-4. N-dimensional array support
-5. Function handle support missing
-6. No static type checking
-7. Linear indexing conversion edge cases
-8. No expression memoization
-9. Tensor cloning strategy unclear
-10. Poor error messages
-11. Missing AST node handlers
-12. Matrix power integer casting
+### 🎯 By Design
+- #10 Char-array vs string literal — both map to Python `str`
+- #25 Struct arrays — intentionally unsupported
+
+### High Priority (open)
+1. Copy-on-write not implemented (#1)
+
+### Medium Priority (open)
+2. N-dimensional array support (#2)
+3. Function handle support missing (#3)
+4. No static type checking (#4)
+5. No expression memoization (#13)
+6. Tensor cloning strategy unclear (#15)
+7. Poor parser error messages (#16)
+8. No integration tests (#30)
 
 ### Low Priority
 - All others
 
 ## Recommendations
 
-1. **Immediate**: Fix matrix division to use `torch.linalg.solve()`
-2. **Short-term**: Implement copy-on-write semantics
-3. **Medium-term**: Add comprehensive test suite
+1. **Next**: Implement copy-on-write semantics (#1) for correctness
+2. **Short-term**: Improve parser error messages (#16)
+3. **Medium-term**: Add integration tests (#30)
 4. **Long-term**: Static type system and optimization passes
 
 ## Notes for Developers
 
-When encountering `assert False, 'TODO'` in code:
-1. Determine if feature is needed for your use case
-2. If needed, implement with test case
-3. If not needed, consider raising more descriptive error
+All `assert False, 'TODO'` and bare `assert condition` have been replaced
+with proper Python exceptions.  The conventions are:
+
+| Situation | Exception to raise |
+|---|---|
+| Unhandled MATLAB syntax / operator | `NotImplementedError` |
+| Unhandled internal code path (programming error) | `RuntimeError` |
+| Wrong argument type passed to a function | `TypeError` |
+| Wrong argument value (e.g. wrong shape) | `ValueError` |
+| CFG execution reaches a dead end | `RuntimeError` |
+| Function name not found in AST | `ValueError` |
 
 When adding new features:
 1. Add test cases first
 2. Update this document with any limitations
 3. Update `matlab-subset.md` with supported features
+4. Use the exception conventions above; never use bare `assert`
+
