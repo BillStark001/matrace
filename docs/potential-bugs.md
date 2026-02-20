@@ -187,9 +187,16 @@ s3 = [s1 ' ' s2];  % May or may not work
 - `'text'` is char array
 - `"text"` is string object (different type)
 
-**Potential Issues**: String-specific MATLAB functions may not work
+**Current Design Decision**: Both literal forms map to a plain Python `str`.
+This is intentional for matrace's numerical focus — string-specific MATLAB
+functions are not a priority.  The interpreter will not distinguish between
+the two types.
 
-**Priority**: Low - minor compatibility issue
+**Known Impact**: String-specific MATLAB functions (e.g. `regexp`,
+`strsplit`, `num2str`) are not implemented and will require injection via
+the `scope` parameter.
+
+**Priority**: Low — by design; no change planned
 
 ## Control Flow
 
@@ -436,18 +443,27 @@ s.(field) = 42;  % Dynamic field access
 
 **Priority**: Low - less common pattern
 
-### 25. Struct Arrays Not Fully Tested
+### 25. Struct Arrays — Intentionally Unsupported
 
-**Issue**: Arrays of structures may have issues.
+**Issue**: Arrays of structures (`s(1).field`, `s(2).field`) are not
+supported.
 
-**Example**:
+**Example (unsupported)**:
 ```matlab
 s(1).field = 1;
 s(2).field = 2;
 values = [s.field];  % Array expansion
 ```
 
-**Priority**: Low - advanced feature
+**Design Decision**: Struct *scalars* (single `DictWrapper` objects) are
+supported.  Struct *arrays* require combining tensor indexing with struct
+field access, which conflicts with the current `DictWrapper` implementation
+and is out of scope for matrace's numerical focus.
+
+**Workaround**: Use cell arrays of structs, or pre-allocate individual
+named variables.
+
+**Priority**: Out of scope — not planned
 
 ## General Limitations
 

@@ -323,22 +323,31 @@ def process_if_statement(cfg: CFG, stmt: If_Statement, current_id: int) -> int:
 
   return end_if
 
-# TODO merge with if since almost identical
+  # TODO merge with if since almost identical
 def process_switch_statement(cfg: CFG, stmt: Switch_Statement, current_id: int) -> int:
   switch_node = cfg.add_node(CFGType.SWITCH_ENTRY, f"Switch #{stmt.uid}", stmt)
   cfg.add_edge(current_id, switch_node, "")
 
   end_switch = cfg.add_node(CFGType.SWITCH_EXIT, "End Switch")
 
+  has_otherwise = False
   for i, action in enumerate(cast(List[Action], stmt.l_actions)):
     action_start = cfg.add_node(CFGType.SWITCH_ACTION_ENTRY, f"{action.kind()} Action", action)
     cfg.add_edge(
-      switch_node, action_start, action.kind(), 
+      switch_node, action_start, action.kind(),
       action.n_expr, i
     )
+    if action.n_expr is None:
+      has_otherwise = True
 
     action_end = process_statements(cfg, action.n_body, action_start)
     cfg.add_edge(action_end, end_switch, "")
+
+  # When no `otherwise` clause exists, add an unconditional fallthrough edge
+  # so that a non-matching switch simply continues after the block.
+  if not has_otherwise:
+    n_actions = len(list(stmt.l_actions))
+    cfg.add_edge(switch_node, end_switch, 'No Match', None, n_actions)
 
   return end_switch
 
